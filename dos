@@ -2,24 +2,55 @@
 
 DOS_VERSION="0.1.0"
 
-SSH_CONTROL_PERSIST="${SSH_CONTROL_PERSIST:-2s}"
-TMP_DIR="${TMP_DIR:-/tmp}"
+# Library section
+
+now_utc_pretty() { date -u +"%Y-%m-%dT%H:%M:%SZ" ; }
+
+println_err() { printf "%s\n" "$*" 1>&2 ; }
+println()     { printf "%s\n" "$*"      ; }
+
+log() {
+  local lvl="$1" ; shift
+
+  println_err "$(now_utc_pretty) [${lvl}] ~ ${*}"
+}
+
+info() { log INFO "$@"         ; }
+fail() { log FAIL "$@" ; false ; }
+
+cmds_exist() { type "$@" >/dev/null 2>&1 || fail "some commands in [${@}] not available" ; }
+cmd_exists() { type "$1" >/dev/null 2>&1 || fail "command '${1}' not available"          ; }
 
 # Only run this routine if the script is not sourced
+
 (return 0 2>/dev/null) || (
 
   set -Cue -o pipefail
 
+  SSH_CONTROL_PERSIST="${SSH_CONTROL_PERSIST:-2s}"
+  TMP_DIR="${TMP_DIR:-/tmp}"
+
+  check_dependencies() {
+    (
+      cmds=(date ssh tar)
+      if ! cmds_exist "${cmds[@]}" ; then
+        for cmd in "${cmds[@]}" ; do
+          cmd_exists "$cmd"
+        done
+      fi
+    )
+  }
+
   print_help() {
-    echo "help"
+    info "help"
   }
 
   print_version() {
-    echo "$DOS_VERSION"
+    println "$DOS_VERSION"
   }
 
   deploy() {
-    host="$1" ; shift
+    host="$1"      ; shift
     local_dir="$1" ; shift
 
     remote_dir="dos"
@@ -40,7 +71,7 @@ TMP_DIR="${TMP_DIR:-/tmp}"
       -oControlPath="$control_path" \
       -oControlPersist="$SSH_CONTROL_PERSIST" \
       "$host" \
-      "$cmd_1" \
+      "$cmd_1"
 
     # Re-use the previous ssh master session
     ssh \
@@ -49,6 +80,8 @@ TMP_DIR="${TMP_DIR:-/tmp}"
       "$host" \
       "$cmd_2"
   }
+
+  check_dependencies
 
   test "$#" -eq 0 && { print_help ; exit ; }
 
