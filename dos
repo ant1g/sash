@@ -1,38 +1,62 @@
 #!/usr/bin/env bash
 
-set -Cue -o pipefail
+DOS_VERSION="0.1.0"
 
-HOST="$1" ; shift
 SSH_CONTROL_PERSIST="${SSH_CONTROL_PERSIST:-2s}"
 TMP_DIR="${TMP_DIR:-/tmp}"
 
-remote_dir="dos"
-control_path="${TMP_DIR}/.$(uuidgen).tmp"
-cmd_1="""
-mkdir -p \"${remote_dir}\" &&
-tar -f - -C \"${remote_dir}\" -xz
-"""
-cmd_2="""
-rm -f \"${remote_dir}/README.md\"
-"""
+# Only run this routine if the script is not sourced
+(return 0 2>/dev/null) || (
 
-cleanup() {
-  ssh -O exit -oControlPath="$control_path" "$HOST" >/dev/null 2>&1
-  rm -f "$control_path"
-}
+  set -Cue -o pipefail
 
-trap cleanup 0
+  print_help() {
+    echo "help"
+  }
 
-tar -f - -cz . | ssh \
-  -T \
-  -oControlMaster=yes \
-  -oControlPath="$control_path" \
-  -oControlPersist="$SSH_CONTROL_PERSIST" \
-  "$HOST" \
-  "$cmd_1" \
+  print_version() {
+    echo "$DOS_VERSION"
+  }
 
-ssh \
-  -tt \
-  -oControlPath="$control_path" \
-  "$HOST" \
-  "$cmd_2"
+  deploy() {
+    host="$1" ; shift
+    local_dir="$1" ; shift
+
+    remote_dir="dos"
+    control_path="${TMP_DIR}/.$(uuidgen).tmp"
+    cmd_1="mkdir -p \"${remote_dir}\" && tar -f - -C \"${remote_dir}\" -xz"
+    cmd_2="rm -f \"${remote_dir}/README.md\""
+
+    cleanup() {
+      ssh -O exit -oControlPath="$control_path" "$host" >/dev/null 2>&1
+      rm -f "$control_path"
+    }
+
+    trap cleanup 0
+
+    tar -f - -cz "$local_dir" | ssh \
+      -T \
+      -oControlMaster=yes \
+      -oControlPath="$control_path" \
+      -oControlPersist="$SSH_CONTROL_PERSIST" \
+      "$host" \
+      "$cmd_1" \
+
+    # Re-use the previous ssh master session
+    ssh \
+      -tt \
+      -oControlPath="$control_path" \
+      "$host" \
+      "$cmd_2"
+  }
+
+  test "$#" -eq 0 && { print_help ; exit ; }
+
+  cmd="$1"
+  case "$cmd" in
+    "-h" | "--help"    | "help"   ) shift ; print_help    "$@" ; exit ;;
+    "-v" | "--version" | "version") shift ; print_version "$@" ; exit ;;
+    "-d" | "--deploy"  | "deploy" ) shift ; deploy        "$@" ; exit ;;
+    *                             )         deploy        "$@" ; exit ;;
+  esac
+)
