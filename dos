@@ -41,7 +41,7 @@ cmd_exists()  { type "$1" >/dev/null 2>&1 || fail "command '${1}' not available"
   # Env
   SSH_CONTROL_PERSIST="${SSH_CONTROL_PERSIST:-2s}"
 
-  required_commands=(date ssh tar)
+  required_commands=(date ssh tar gzip)
 
   check_dependencies() {
     if ! cmds_exist "$@" ; then
@@ -66,17 +66,35 @@ cmd_exists()  { type "$1" >/dev/null 2>&1 || fail "command '${1}' not available"
     local flavor="${DOS_FLAVOR:-}"
     local flavor_dir="${target_dir}/flavors/${flavor}"
 
+    # Ensure dirs exist
     dir_exists "$target_dir"
     test -z "$flavor" || { dir_exists "$flavor_dir" ; }
 
-    # Select content of the target dir, excluding the flavors folder
+    # Select content of the target dir
+
+    # Include this script
+    cp "${THIS_SCRIPT}" "$build_dir"
+    chmod +x "${build_dir}/${SCRIPT_NAME}"
+
+    # Include content of target dir
     (
       cd "$target_dir"
 
       find . -mindepth 1 -maxdepth 1 \
-              -not -name "flavors" \
-              -not -name "*.incl" \
-              -exec cp -r '{}' "$build_dir" ';'
+        -not -name "flavors" \
+        -not -name "*.incl" \
+        -exec cp -r '{}' "$build_dir" ';'
+    )
+
+    # Select the correct flavor separately
+    test -z "$flavor" || (
+      cd "$flavor_dir"
+
+      mkdir -p "${build_dir}/flavor"
+
+      find . -mindepth 1 -maxdepth 1 \
+        -not -name "*.incl" \
+        -exec cp -r '{}' "${build_dir}/flavor" ';'
     )
   }
 
