@@ -4,6 +4,8 @@ DOS_VERSION="0.1.0"
 
 # Library section
 
+rand_str() { xxd -l16 -ps /dev/urandom ; }
+
 now_utc_pretty() { date -u +"%Y-%m-%dT%H:%M:%SZ" ; }
 
 println_err() { printf "%s\n" "$*" 1>&2 ; }
@@ -18,8 +20,10 @@ log() {
 info() { log INFO "$@"         ; }
 fail() { log FAIL "$@" ; false ; }
 
-cmds_exist() { type "$@" >/dev/null 2>&1 || fail "some commands in [${@}] not available" ; }
-cmd_exists() { type "$1" >/dev/null 2>&1 || fail "command '${1}' not available"          ; }
+file_exists() { test -f "$1" || fail "file '${1}' not found"                                  ; }
+dir_exists()  { test -d "$1" || fail "directory '${1}' not found"                             ; }
+cmds_exist()  { type "$@" >/dev/null 2>&1 || fail "some commands in [${@}] are not available" ; }
+cmd_exists()  { type "$1" >/dev/null 2>&1 || fail "command '${1}' not available"              ; }
 
 # Only run this routine if the script is not sourced
 
@@ -27,18 +31,25 @@ cmd_exists() { type "$1" >/dev/null 2>&1 || fail "command '${1}' not available" 
 
   set -Cue -o pipefail
 
-  SSH_CONTROL_PERSIST="${SSH_CONTROL_PERSIST:-2s}"
+  SCRIPT_NAME="$(basename "${0}")"
+  THIS_DIR="$(cd "$(dirname "$(readlink "${0}" || echo "${0}")")" ; pwd)" # Absolute path to module
+  THIS_SCRIPT="${THIS_DIR}/${SCRIPT_NAME}"
+  DEBUG="${DOS_DEBUG:-false}"
+  WORK_DIR="${DOS_DIR:-"${PWD}"}"
   TMP_DIR="${TMP_DIR:-/tmp}"
 
+  # Env
+  SSH_CONTROL_PERSIST="${SSH_CONTROL_PERSIST:-2s}"
+
+  required_commands=(date ssh tar)
+
   check_dependencies() {
-    (
-      cmds=(date ssh tar)
-      if ! cmds_exist "${cmds[@]}" ; then
-        for cmd in "${cmds[@]}" ; do
-          cmd_exists "$cmd"
-        done
-      fi
-    )
+    if ! cmds_exist "$@" ; then
+      local cmd
+      for cmd in "$@" ; do
+        cmd_exists "$cmd"
+      done
+    fi
   }
 
   print_help() {
@@ -49,39 +60,81 @@ cmd_exists() { type "$1" >/dev/null 2>&1 || fail "command '${1}' not available" 
     println "$DOS_VERSION"
   }
 
-  deploy() {
-    host="$1"      ; shift
-    local_dir="$1" ; shift
+  build_target() {
+    local build_dir="$1"  ; shift
+    local target_dir="$1" ; shift
+    local flavor="${DOS_FLAVOR:-}"
+    local flavor_dir="${target_dir}/flavors/${flavor}"
 
-    remote_dir="dos"
-    control_path="${TMP_DIR}/.$(uuidgen).tmp"
-    cmd_1="mkdir -p \"${remote_dir}\" && tar -f - -C \"${remote_dir}\" -xz"
-    cmd_2="rm -f \"${remote_dir}/README.md\""
+    dir_exists "$target_dir"
+    test -z "$flavor" || { dir_exists "$flavor_dir" ; }
 
-    cleanup() {
-      ssh -O exit -oControlPath="$control_path" "$host" >/dev/null 2>&1
-      rm -f "$control_path"
-    }
+    # Select content of the target dir, excluding the flavors folder
+    (
+      cd "$target_dir"
 
-    trap cleanup 0
-
-    tar -f - -cz "$local_dir" | ssh \
-      -T \
-      -oControlMaster=yes \
-      -oControlPath="$control_path" \
-      -oControlPersist="$SSH_CONTROL_PERSIST" \
-      "$host" \
-      "$cmd_1"
-
-    # Re-use the previous ssh master session
-    ssh \
-      -tt \
-      -oControlPath="$control_path" \
-      "$host" \
-      "$cmd_2"
+      find . -mindepth 1 -maxdepth 1 \
+              -not -name "flavors" \
+              -not -name "*.incl" \
+              -exec cp -r '{}' "$build_dir" ';'
+    )
   }
 
-  check_dependencies
+  deploy() {
+    (
+      host="$1"      ; shift
+      build_dir="$1" ; shift
+
+      remote_dir="dos"
+      control_path="${TMP_DIR}/.$(rand_str).tmp"
+      cmd_1="mkdir -p \"${remote_dir}\" && tar -f - -C \"${remote_dir}\" -xz"
+      cmd_2="ls -larth \"${remote_dir}\""
+
+      cleanup_connection() {
+        ssh -O exit -oControlPath="$control_path" "$host" >/dev/null 2>&1
+        rm -f "$control_path"
+      }
+
+      trap cleanup_connection 0
+
+      (
+        cd "$build_dir"
+
+        # Copy target
+        tar -f - -cz . | ssh \
+          -T \
+          -oControlMaster=yes \
+          -oControlPath="$control_path" \
+          -oControlPersist="$SSH_CONTROL_PERSIST" \
+          "$host" \
+          "$cmd_1"
+
+        # Re-use the previous ssh master session
+        ssh \
+          -tt \
+          -oControlPath="$control_path" \
+          "$host" \
+          "$cmd_2"
+      )
+    )
+  }
+
+  run_deploy() {
+    local host="$1"   ; shift
+    local target="$1" ; shift
+
+    local target_dir="$(cd "${target}" ; pwd)"
+    local build_dir="${TMP_DIR}/.$(rand_str).tmp"
+
+    trap "rm -rf '${build_dir}'" 0
+
+    mkdir -p "$build_dir"
+
+    build_target "$build_dir" "$target_dir"
+    deploy "$host" "$build_dir"
+  }
+
+  check_dependencies "${required_commands[@]}"
 
   test "$#" -eq 0 && { print_help ; exit ; }
 
@@ -89,7 +142,7 @@ cmd_exists() { type "$1" >/dev/null 2>&1 || fail "command '${1}' not available" 
   case "$cmd" in
     "-h" | "--help"    | "help"   ) shift ; print_help    "$@" ; exit ;;
     "-v" | "--version" | "version") shift ; print_version "$@" ; exit ;;
-    "-d" | "--deploy"  | "deploy" ) shift ; deploy        "$@" ; exit ;;
-    *                             )         deploy        "$@" ; exit ;;
+    "-d" | "--deploy"  | "deploy" ) shift ; run_deploy    "$@" ; exit ;;
+    *                             )         run_deploy    "$@" ; exit ;;
   esac
 )
