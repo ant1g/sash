@@ -20,10 +20,26 @@ log() {
 info() { log INFO "$@"         ; }
 fail() { log FAIL "$@" ; false ; }
 
+trim() { local a=("$1") ; println "${a[*]}" ; }
+
 file_exists() { test -f "$1" || fail "file '${1}' not found"                                  ; }
 dir_exists()  { test -d "$1" || fail "directory '${1}' not found"                             ; }
 cmds_exist()  { type "$@" >/dev/null 2>&1 || fail "some commands in [${@}] are not available" ; }
 cmd_exists()  { type "$1" >/dev/null 2>&1 || fail "command '${1}' not available"              ; }
+
+# Read config file
+read_config_file() {
+  (
+    while IFS= read -r line <&3 ; do
+      trim "$line"
+    done 3< "$1"
+   ) | grep -v "^#.*\|^$"
+}
+
+# Interpolate all environment variables present in input
+env_subst() {
+  cat
+}
 
 # Only run this routine if the script is not sourced
 
@@ -82,7 +98,6 @@ cmd_exists()  { type "$1" >/dev/null 2>&1 || fail "command '${1}' not available"
 
       find . -mindepth 1 -maxdepth 1 \
         -not -name "flavors" \
-        -not -name "*.incl" \
         -exec cp -r '{}' "$build_dir" ';'
     )
 
@@ -93,9 +108,40 @@ cmd_exists()  { type "$1" >/dev/null 2>&1 || fail "command '${1}' not available"
       mkdir -p "${build_dir}/flavor"
 
       find . -mindepth 1 -maxdepth 1 \
-        -not -name "*.incl" \
         -exec cp -r '{}' "${build_dir}/flavor" ';'
     )
+
+    # Handle include files
+    (
+      cd "$target_dir"
+
+      while IFS= read -r -d '' file <&3 ; do
+        src_dir="$(cd "$(dirname "${target_dir}/${file}")" ; pwd)"
+        dst_dir="$build_dir"
+
+        include_item() {
+          local src="$1" ; shift
+          local dst="$1" ; shift
+          local src_path="$(realpath "${src_dir}/${src}")"
+          local src_name="$(basename "${src_path}")"
+          local dst_path="${dst_dir}/${dst}"
+
+          info "including item '${src_name}' to '${dst}'"
+          cp -r "$src_path" "$dst_path"
+        }
+
+        while IFS= read -r line <&4 ; do
+          read -a args <<< "$line"
+          include_item "${args[@]}"
+        done 4< <(read_config_file "$file" | env_subst)
+      done 3< <(find . -maxdepth 1 -mindepth 1 -type f -name "*.incl" -print0)
+
+      cd "$build_dir"
+
+      find . -maxdepth 1 -mindepth 1 -type f -name "*.incl" -delete
+    )
+
+    find "$build_dir"
   }
 
   deploy() {
