@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+PROJECT_DIR="$(cd "$(dirname "${0}")/.." ; pwd)" # Absolute path to project
+
+(
+  cd "$PROJECT_DIR"
+
+  . dos
+
+  "$@"
+)

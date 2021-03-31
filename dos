@@ -123,10 +123,10 @@ env_subst() {
           local src="$1" ; shift
           local dst="$1" ; shift
           local src_path="$(realpath "${src_dir}/${src}")"
-          local src_name="$(basename "${src_path}")"
           local dst_path="${dst_dir}/${dst}"
+          local src_name="$(basename "${src_path}")"
 
-          info "including item '${src_name}' to '${dst}'"
+          info "including item '${src_name}'"
           cp -r "$src_path" "$dst_path"
         }
 
