@@ -27,6 +27,33 @@ dir_exists()  { test -d "$1" || fail "directory '${1}' not found"               
 cmds_exist()  { type "$@" >/dev/null 2>&1 || fail "some commands in [${@}] are not available" ; }
 cmd_exists()  { type "$1" >/dev/null 2>&1 || fail "command '${1}' not available"              ; }
 
+# Check if any argument contains a variable (ABC=123)
+args_contains_var() {
+  local var="$1" ; shift
+  local arg
+  for arg in "$@" ; do
+    if [[ "$arg" == "${var}="* ]] ; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Print all arguments
+print_args() {
+  local arg
+  for arg in "$@"; do
+    println "$arg"
+  done
+}
+
+# Export content of given env file in current shell
+export_env_file() {
+  while read -r _dos_var5 <&5 ; do
+    export "$(trim "${_dos_var5}")"
+  done 5< <(cat "$1" | grep "=")
+}
+
 # Read config file
 read_config_file() {
   (
@@ -40,7 +67,7 @@ read_config_file() {
 atomic_write() {
   local file="$(realpath "${1}")" ; shift
 
-  local dir="$(dirname "$file")"
+  local dir="$(dirname "${file}")"
   local tmp_file="${dir}/.$(rand_str).tmp"
 
   cat > "$tmp_file"
@@ -60,14 +87,6 @@ sys.stdout.write(data) ; sys.stdout.flush()
 '''
 }
 
-# Print all arguments
-print_args() {
-  local arg
-  for arg in "$@"; do
-    println "$arg"
-  done
-}
-
 # Main section
 
 # Only run this routine if the script is not sourced
@@ -76,7 +95,7 @@ print_args() {
   set -Cue -o pipefail
 
   SCRIPT_NAME="$(basename "${0}")"
-  THIS_DIR="$(cd "$(dirname "$(readlink "${0}" || echo "${0}")")" ; pwd)" # Absolute path to module
+  THIS_DIR="$(cd "$(dirname "$(readlink "${0}" || printf "${0}")")" ; pwd)" # Absolute path to module
   THIS_SCRIPT="${THIS_DIR}/${SCRIPT_NAME}"
   DEBUG="${DOS_DEBUG:-false}"
   WORK_DIR="${DOS_DIR:-"${PWD}"}"
@@ -84,6 +103,7 @@ print_args() {
 
   # Env
   SSH_CONTROL_PERSIST="${SSH_CONTROL_PERSIST:-2s}"
+  EXTRA_VARS=()
 
   required_commands=(date ssh tar gzip python)
 
@@ -94,6 +114,35 @@ print_args() {
         cmd_exists "$cmd"
       done
     fi
+  }
+
+  # Add new var to EXTRA_VARS if not already present
+  add_extra_var() {
+    local var_line="$1" ; shift
+
+    local name="${var_line%%=*}"
+
+    if ! args_contains_var "$name" "${EXTRA_VARS[@]}" ; then # Check if var name is not already processed
+        EXTRA_VARS+=("$var_line")
+    fi
+  }
+
+  # Read variables from a file and append them to EXTRA_VARS, existing in the outer scope
+  read_file_extra_vars() {
+    local var_line
+    while IFS= read -r var_line <&6 ; do
+      add_extra_var "$(trim "${var_line}")"
+    done 6< <(read_config_file "$1" | grep "=")
+  }
+
+  # Read variables from the command line and add them to EXTRA_VARS, existing in the outer scope
+  read_cli_extra_vars() {
+    local var_line
+    for var_line in "$@" ; do
+      if [[ "$var_line" == *"="* ]]; then # Only consider args with = ([[ needed for globbing)
+        add_extra_var "$var_line"
+      fi
+    done
   }
 
   # Wrapper script that will run the deploy executable
@@ -110,9 +159,11 @@ THIS_DIR="\$(cd "\$(dirname "\${0}")" ; pwd)"
 
   . dos
 
-  info ">> running 'deploy' for target '$\{DOS_TARGET}' ..."
+  export_env_file deploy.env
+
+  info ">> running 'deploy' for target '\${DOS_TARGET}' ..."
   ./deploy
-  info "<< ran 'deploy' for target '$\{DOS_TARGET}' successfully"
+  info "<< ran 'deploy' for target '\${DOS_TARGET}' successfully"
 )
 EOS
   }
@@ -129,6 +180,7 @@ EOS
     local build_dir="$1"  ; shift
     local target_dir="$1" ; shift
 
+    local target="$(basename "${target_dir}")"
     local flavor="${DOS_FLAVOR:-}"
     local flavor_dir="${target_dir}/flavors/${flavor}"
 
@@ -138,9 +190,25 @@ EOS
 
     # Select content of the target dir
 
-    # Include this script
-    cp "${THIS_SCRIPT}" "$build_dir"
-    chmod +x "${build_dir}/${SCRIPT_NAME}"
+    # Include this script, the deploy routine and environment file
+    (
+      cd "$build_dir"
+
+      cp "${THIS_SCRIPT}" .
+      dos_script > dos.script
+      chmod +x "${THIS_SCRIPT}" dos.script
+
+      # Gather all variables in an env file
+      print_args \
+        "DOS_TARGET=${target}" \
+        "DOS_FLAVOR=${flavor}" \
+        "${EXTRA_VARS[@]}" > deploy.env
+
+      cat deploy.env
+    )
+
+    # Make sure all variables are available in this scope
+    export_env_file "${build_dir}/deploy.env"
 
     # Include content of target dir
     (
@@ -199,14 +267,6 @@ EOS
       done 3< <(find . -type f -name "*.tpl" -print0)
     )
 
-    # And the deploy routine and environment file
-    (
-      cd "$build_dir"
-
-      dos_script > dos.script
-      chmod +x dos.script
-    )
-
     # TODO remove
     find "$build_dir"
   }
@@ -248,7 +308,7 @@ EOS
     )
   }
 
-  run_deploy() {
+  deploy_target() {
     local host="$1"   ; shift
     local target="$1" ; shift
 
@@ -261,6 +321,25 @@ EOS
 
     build_target "$build_dir" "$target_dir"
     deploy       "$build_dir" "$host"
+  }
+
+  deploy_runbook() {
+    local runbook_path="$1" ; shift
+
+    file_exists "$runbook_path"
+  }
+
+  run_deploy() {
+    if [ -f "$1" ] ; then
+      deploy_runbook "$@"
+    else
+      host="$1"   ; shift
+      target="$1" ; shift
+
+      read_cli_extra_vars "$@"
+
+      deploy_target "$host" "$target"
+    fi
   }
 
   check_dependencies "${required_commands[@]}"
