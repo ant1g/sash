@@ -4,7 +4,7 @@ DOS_VERSION="0.1.0"
 
 # Library section
 
-rand_str() { xxd -l16 -ps /dev/urandom ; }
+rand_str() { xxd -l8 -ps /dev/urandom ; }
 
 now_utc_pretty() { date -u +"%Y-%m-%dT%H:%M:%SZ" ; }
 
@@ -36,13 +36,32 @@ read_config_file() {
    ) | grep -v "^#.*\|^$"
 }
 
-# Interpolate all environment variables present in input
-env_subst() {
-  cat
+# Write stdin data atomically to file, using a temporary file
+atomic_write() {
+  local file="$(realpath "${1}")" ; shift
+  local dir="$(dirname "$file")"
+  local tmp_file="${dir}/.$(rand_str).tmp"
+
+  cat > "$tmp_file"
+  mv "$tmp_file" "$file"
 }
 
-# Only run this routine if the script is not sourced
+# Interpolate all environment variables present in input
+# Can be optimized...
+env_subst() {
+  python -c '''
+import os, sys
+data = sys.stdin.read()
+for v in os.environ:
+  data = data.replace("$%s" % v, os.environ[v])
+  data = data.replace("${%s}" % v, os.environ[v])
+sys.stdout.write(data) ; sys.stdout.flush()
+'''
+}
 
+# Main section
+
+# Only run this routine if the script is not sourced
 (return 0 2>/dev/null) || (
 
   set -Cue -o pipefail
@@ -57,7 +76,7 @@ env_subst() {
   # Env
   SSH_CONTROL_PERSIST="${SSH_CONTROL_PERSIST:-2s}"
 
-  required_commands=(date ssh tar gzip)
+  required_commands=(date ssh tar gzip python)
 
   check_dependencies() {
     if ! cmds_exist "$@" ; then
@@ -135,19 +154,27 @@ env_subst() {
           include_item "${args[@]}"
         done 4< <(read_config_file "$file" | env_subst)
       done 3< <(find . -maxdepth 1 -mindepth 1 -type f -name "*.incl" -print0)
-
-      cd "$build_dir"
-
-      find . -maxdepth 1 -mindepth 1 -type f -name "*.incl" -delete
     )
 
+    # Handle template files
+    (
+      cd "$build_dir"
+
+      while IFS= read -r -d '' file <&3 ; do
+        dst_path="${file%.tpl}"
+        cat "$file" | env_subst | atomic_write "$dst_path"
+        rm "$file"
+      done 3< <(find . -type f -name "*.tpl" -print0)
+    )
+
+    # TODO remove
     find "$build_dir"
   }
 
   deploy() {
     (
-      host="$1"      ; shift
       build_dir="$1" ; shift
+      host="$1"      ; shift
 
       remote_dir="dos"
       control_path="${TMP_DIR}/.$(rand_str).tmp"
@@ -195,7 +222,7 @@ env_subst() {
     mkdir -p "$build_dir"
 
     build_target "$build_dir" "$target_dir"
-    deploy "$host" "$build_dir"
+    deploy       "$build_dir" "$host"
   }
 
   check_dependencies "${required_commands[@]}"
