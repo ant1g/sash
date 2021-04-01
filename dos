@@ -39,6 +39,7 @@ read_config_file() {
 # Write stdin data atomically to file, using a temporary file
 atomic_write() {
   local file="$(realpath "${1}")" ; shift
+
   local dir="$(dirname "$file")"
   local tmp_file="${dir}/.$(rand_str).tmp"
 
@@ -57,6 +58,14 @@ for v in os.environ:
   data = data.replace("${%s}" % v, os.environ[v])
 sys.stdout.write(data) ; sys.stdout.flush()
 '''
+}
+
+# Print all arguments
+print_args() {
+  local arg
+  for arg in "$@"; do
+    println "$arg"
+  done
 }
 
 # Main section
@@ -87,6 +96,27 @@ sys.stdout.write(data) ; sys.stdout.flush()
     fi
   }
 
+  # Wrapper script that will run the deploy executable
+  dos_script() {
+    cat << EOS
+#!/usr/bin/env bash
+
+set -Cue -o pipefail
+
+THIS_DIR="\$(cd "\$(dirname "\${0}")" ; pwd)"
+
+(
+  cd "\$THIS_DIR"
+
+  . dos
+
+  info ">> running 'deploy' for target '$\{DOS_TARGET}' ..."
+  ./deploy
+  info "<< ran 'deploy' for target '$\{DOS_TARGET}' successfully"
+)
+EOS
+  }
+
   print_help() {
     info "help"
   }
@@ -98,6 +128,7 @@ sys.stdout.write(data) ; sys.stdout.flush()
   build_target() {
     local build_dir="$1"  ; shift
     local target_dir="$1" ; shift
+
     local flavor="${DOS_FLAVOR:-}"
     local flavor_dir="${target_dir}/flavors/${flavor}"
 
@@ -141,6 +172,7 @@ sys.stdout.write(data) ; sys.stdout.flush()
         include_item() {
           local src="$1" ; shift
           local dst="$1" ; shift
+
           local src_path="$(realpath "${src_dir}/${src}")"
           local dst_path="${dst_dir}/${dst}"
           local src_name="$(basename "${src_path}")"
@@ -167,6 +199,14 @@ sys.stdout.write(data) ; sys.stdout.flush()
       done 3< <(find . -type f -name "*.tpl" -print0)
     )
 
+    # And the deploy routine and environment file
+    (
+      cd "$build_dir"
+
+      dos_script > dos.script
+      chmod +x dos.script
+    )
+
     # TODO remove
     find "$build_dir"
   }
@@ -178,8 +218,6 @@ sys.stdout.write(data) ; sys.stdout.flush()
 
       remote_dir="dos"
       control_path="${TMP_DIR}/.$(rand_str).tmp"
-      cmd_1="mkdir -p \"${remote_dir}\" && tar -f - -C \"${remote_dir}\" -xz"
-      cmd_2="ls -larth \"${remote_dir}\""
 
       cleanup_connection() {
         ssh -O exit -oControlPath="$control_path" "$host" >/dev/null 2>&1
@@ -198,14 +236,14 @@ sys.stdout.write(data) ; sys.stdout.flush()
           -oControlPath="$control_path" \
           -oControlPersist="$SSH_CONTROL_PERSIST" \
           "$host" \
-          "$cmd_1"
+          "mkdir -p \"${remote_dir}\" && tar -f - -C \"${remote_dir}\" -xz"
 
         # Re-use the previous ssh master session
         ssh \
           -tt \
           -oControlPath="$control_path" \
           "$host" \
-          "$cmd_2"
+          "\"${remote_dir}/dos.script\""
       )
     )
   }

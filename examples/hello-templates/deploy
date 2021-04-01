@@ -1,0 +1,20 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+
+import json
+import os
+
+
+def read_json_file(path):
+    with open(path) as f:
+        return json.load(f)
+
+
+hello_vars = read_json_file("vars.json")
+hello_say = read_json_file("hello.json")
+
+hello = hello_say[hello_vars["lang"]]
+env = hello_vars["env"]
+
+print(f'{hello} {env}!')
