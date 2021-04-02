@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -Cue -o pipefail
+
 # Wrapper that sources the dos script
 # This is used to access the library functions of dos
 

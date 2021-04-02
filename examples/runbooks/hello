@@ -1,0 +1,5 @@
+HELLO_ENV=acc
+
+example.host ../hello-templates HELLO_LANG=french
+example.host ../hello-templates HELLO_LANG=dutch HELLO_ENV=prd
+example.host ../hello-templates HELLO_LANG=english
