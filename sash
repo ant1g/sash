@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 
-DOS_VERSION="0.1.0"
+SASH_VERSION="0.1.0"
 
 # Library section
 
 rand_str() { xxd -l8 -ps /dev/urandom ; }
 
+now_utc()        { date -u +"%Y%m%dT%H%M%SZ"     ; }
 now_utc_pretty() { date -u +"%Y-%m-%dT%H:%M:%SZ" ; }
 
 println_err() { printf "%s\n" "$*" 1>&2 ; }
@@ -30,6 +31,7 @@ cmd_exists()  { type "$1" >/dev/null 2>&1 || fail "command '${1}' not available"
 # Check if any argument contains a variable (ABC=123)
 args_contains_var() {
   local var="$1" ; shift
+
   local arg
   for arg in "$@" ; do
     if [[ "$arg" == "${var}="* ]] ; then
@@ -49,8 +51,8 @@ print_args() {
 
 # Export content of given env file in current shell
 export_env_file() {
-  while read -r _dos_export_var <&3 ; do
-    export "$(trim "${_dos_export_var}")"
+  while read -r _sash_export_var <&3 ; do
+    export "$(trim "${_sash_export_var}")"
   done 3< <(cat "$1" | grep "=")
 }
 
@@ -97,14 +99,14 @@ sys.stdout.write(data) ; sys.stdout.flush()
   SCRIPT_NAME="$(basename "${0}")"
   THIS_DIR="$(cd "$(dirname "$(readlink "${0}" || printf "${0}")")" ; pwd)" # Absolute path to module
   THIS_SCRIPT="${THIS_DIR}/${SCRIPT_NAME}"
-  DEBUG="${DOS_DEBUG:-false}"
-  WORK_DIR="${DOS_DIR:-"${PWD}"}"
+  DEBUG="${SASH_DEBUG:-false}"
+  WORK_DIR="${SASH_DIR:-"${PWD}"}"
   TMP_DIR="${TMP_DIR:-/tmp}"
 
   required_commands=(date ssh tar gzip python)
 
   # Env
-  SSH_CONTROL_PERSIST="${SSH_CONTROL_PERSIST:-2s}"
+  SSH_CONTROL_PERSIST="${DASH_SSH_CONTROL_PERSIST:-2s}"
 
   # Check if all required commands are available
   check_dependencies() {
@@ -184,7 +186,7 @@ sys.stdout.write(data) ; sys.stdout.flush()
   }
 
   # Wrapper script that will run the deploy executable
-  dos_script() {
+  sash_script() {
     cat << EOS
 #!/usr/bin/env bash
 
@@ -195,13 +197,13 @@ THIS_DIR="\$(cd "\$(dirname "\${0}")" ; pwd)"
 (
   cd "\$THIS_DIR"
 
-  . dos
+  . sash
 
   export_env_file deploy.env
 
-  info ">> running 'deploy' for target '\${DOS_TARGET}' ..."
+  info ">> running 'deploy' for target '\${SASH_TARGET}' ..."
   ./deploy
-  info "<< ran 'deploy' for target '\${DOS_TARGET}' successfully"
+  info "<< ran 'deploy' for target '\${SASH_TARGET}' successfully"
 )
 EOS
   }
@@ -211,7 +213,7 @@ EOS
   }
 
   print_version() {
-    println "$DOS_VERSION"
+    println "$SASH_VERSION"
   }
 
   build_target() {
@@ -231,12 +233,12 @@ EOS
       cd "$build_dir"
 
       cp "${THIS_SCRIPT}" .
-      dos_script > dos.script
-      chmod +x "${THIS_SCRIPT}" dos.script
+      sash_script > sash.script
+      chmod +x "${THIS_SCRIPT}" sash.script
 
       # Gather all variables in a single env file
       print_args \
-        "DOS_TARGET=${target}" \
+        "SASH_TARGET=${target}" \
         "${all_vars[@]}" | sort > deploy.env
     )
 
@@ -253,7 +255,7 @@ EOS
     )
 
     # Select the correct flavor separately
-    local flavor="${DOS_FLAVOR:-}"
+    local flavor="${SASH_FLAVOR:-}"
     local flavor_dir="${target_dir}/flavors/${flavor}"
 
     test -z "$flavor" || (
@@ -311,7 +313,7 @@ EOS
       build_dir="$1" ; shift
       host="$1"      ; shift
 
-      remote_dir="dos"
+      remote_dir="sash"
       control_path="${TMP_DIR}/.$(rand_str).tmp"
 
       cleanup_connection() {
@@ -338,7 +340,7 @@ EOS
           -tt \
           -oControlPath="$control_path" \
           "$host" \
-          "\"${remote_dir}/dos.script\""
+          "\"${remote_dir}/sash.script\""
       )
     )
   }

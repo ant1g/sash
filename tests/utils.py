@@ -18,7 +18,7 @@ def run(cmd, stdin_data=b"", env={}, acceptable_returncodes=[0]):
     (rc, stdout_data, stderr_data) = run3(cmd, stdin_data, env)
 
     if not rc in acceptable_returncodes:
-        sys.stderr.write(stderr_data)
+        sys.stderr.write(stderr_data.decode())
         raise subprocess.CalledProcessError(rc, cmd, stderr_data)
 
     return stdout_data
