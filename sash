@@ -41,7 +41,7 @@ args_contains_var() {
   return 1
 }
 
-# Print all arguments
+# Print each function argument as a new line
 print_args() {
   local arg
   for arg in "$@"; do
@@ -56,7 +56,7 @@ export_env_file() {
   done 3< <(cat "$1" | grep "=")
 }
 
-# Read config file
+# Read config file, comments and empty lines are ignored
 read_config_file() {
   (
     while IFS= read -r line <&3 ; do
@@ -106,7 +106,7 @@ sys.stdout.write(data) ; sys.stdout.flush()
   required_commands=(date ssh tar gzip python)
 
   # Env
-  SSH_CONTROL_PERSIST="${DASH_SSH_CONTROL_PERSIST:-2s}"
+  SSH_CONTROL_PERSIST="${SASH_SSH_CONTROL_PERSIST:-2s}"
 
   # Check if all required commands are available
   check_dependencies() {
@@ -271,6 +271,14 @@ EOS
 
     # Handle include files
     (
+      locate_include_files() {
+        find . \
+          -maxdepth 1 -mindepth 1 \
+          -type f \
+          \( -name "*.inc" -o -name "*.incl" -o -name "*.include" -o -name "*.includes" \) \
+          -print0
+      }
+
       cd "$target_dir"
 
       while IFS= read -r -d '' file <&3 ; do
@@ -293,18 +301,26 @@ EOS
           read -a args <<< "$line"
           include_item "${args[@]}"
         done 4< <(read_config_file "$file" | env_subst)
-      done 3< <(find . -maxdepth 1 -mindepth 1 -type f -name "*.incl" -print0)
+      done 3< <(locate_include_files)
     )
 
     # Handle template files
     (
+      locate_template_files() {
+        find . \
+          -maxdepth 1 -mindepth 1 \
+          -type f \
+          \( -name "*.tpl" -o -name "*.templ" -o -name "*.template" \) \
+          -print0
+      }
+
       cd "$build_dir"
 
       while IFS= read -r -d '' file <&3 ; do
         dst_path="${file%.tpl}"
         cat "$file" | env_subst | atomic_write "$dst_path"
         rm "$file"
-      done 3< <(find . -type f -name "*.tpl" -print0)
+      done 3< <(locate_template_files)
     )
   }
 
