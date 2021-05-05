@@ -81,7 +81,7 @@ atomic_write() {
 env_subst() {
   python -c '''
 import os, sys
-data = sys.stdin.read()
+data = sys.stdin.read(65536)
 for v in os.environ:
   data = data.replace("$%s" % v, os.environ[v])
   data = data.replace("${%s}" % v, os.environ[v])

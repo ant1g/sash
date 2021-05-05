@@ -1,0 +1,14 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+
+import json
+import sys
+
+max_bytes = 65536
+
+key = sys.argv[1]
+data = sys.stdin.read(max_bytes)
+json_data = json.loads(data)
+
+print(json_data[key])
