@@ -35,7 +35,7 @@ cmds_exist()  { type "$@" >/dev/null 2>&1 || fail "some commands in [${@}] are n
 cmd_exists()  { type "$1" >/dev/null 2>&1 || fail "command '${1}' not available"              ; }
 
 # Check if any argument contains a variable (ABC=123)
-args_contains_var() {
+args_contain_var() {
   local var="$1" ; shift
 
   local arg
@@ -151,7 +151,7 @@ sys.stdout.write(data) ; sys.stdout.flush()
       local var_line="$1" ; shift
       local name="${var_line%%=*}"
 
-      if ! args_contains_var "$name" "${v[@]}" ; then
+      if ! args_contain_var "$name" "${v[@]}" ; then
         v+=("$var_line")
       fi
     }
