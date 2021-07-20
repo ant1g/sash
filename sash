@@ -14,14 +14,20 @@ println()     { printf "%s\n" "$*"      ; }
 
 log() {
   local lvl="$1" ; shift
-
   println_err "$(now_utc_pretty) [${lvl}] ~ ${*}"
+}
+
+debug() {
+  if [[ "$DEBUG" -gt "1" ]] ; then
+    log DEBUG "$@"
+  fi
 }
 
 info() { log INFO "$@"         ; }
 fail() { log FAIL "$@" ; false ; }
 
 trim() { local a=("$1") ; println "${a[*]}" ; }
+cnt_char() { println "$1" | awk -F ":" '{print NF-1}' ; }
 
 file_exists() { test -f "$1" || fail "file '${1}' not found"                                  ; }
 dir_exists()  { test -d "$1" || fail "directory '${1}' not found"                             ; }
@@ -92,7 +98,6 @@ sys.stdout.write(data) ; sys.stdout.flush()
 
 # Only run this routine if the script is not sourced
 (return 0 2>/dev/null) || (
-
   set -Cue -o pipefail
 
   # Dirs
@@ -103,9 +108,12 @@ sys.stdout.write(data) ; sys.stdout.flush()
   required_commands=(date ssh tar gzip python)
 
   # Env
-  DEBUG="${SASH_DEBUG:-false}"
+  DEBUG="${SASH_DEBUG:-0}"
   WORK_DIR="${SASH_DIR:-"${PWD}"}"
   SSH_CONTROL_PERSIST="${SASH_SSH_CONTROL_PERSIST:-2s}"
+
+  if [ "$DEBUG" == "true" ] ; then DEBUG="1" ; fi
+  if [ "$DEBUG" == "2"    ] ; then set -x    ; fi
 
   # Check if all required commands are available
   check_dependencies() {
@@ -135,6 +143,7 @@ sys.stdout.write(data) ; sys.stdout.flush()
   declare -n all_vars_ref="all_vars"   ; all_vars=()
 
   vars() {
+    # Grab the array from its name
     local vars_name="$1" ; shift
     local -n v="$vars_name"
 
@@ -215,8 +224,18 @@ EOS
   }
 
   build_target() {
-    local build_dir="$1"  ; shift
     local target_dir="$1" ; shift
+    local build_dir="$1"  ; shift
+
+    # Flavor in dir name
+    if [ "$(cnt_char "$target_dir")" == "1" ] ; then
+      local flavor="$(echo "$target_dir" | cut -d":" -f1)"
+      local target_dir="$(echo "$target_dir" | cut -d":" -f2)"
+
+      vars line_vars push SASH_FLAVOR="$flavor"
+    fi
+
+    local target_dir="$(realpath "${target_dir}")"
     local target="$(basename "${target_dir}")"
 
     dir_exists "$target_dir"
@@ -323,8 +342,8 @@ EOS
 
   deploy() {
     (
-      build_dir="$1" ; shift
       host="$1"      ; shift
+      build_dir="$1" ; shift
       remote_dir="sash"
       control_path="${TMP_DIR}/.$(rand_str).tmp"
 
@@ -366,8 +385,8 @@ EOS
 
     mkdir -p "$build_dir"
 
-    build_target "$build_dir" "$target_dir"
-    deploy       "$build_dir" "$host"
+    build_target "$target_dir" "$build_dir"
+    deploy       "$host"       "$build_dir"
   }
 
   deploy_runbook() {
@@ -398,8 +417,8 @@ EOS
     if [ -f "$1" ] ; then
       deploy_runbook "$@"
     else
-      host="$1"                   ; shift
-      target="$(realpath "${1}")" ; shift
+      host="$1"   ; shift
+      target="$1" ; shift
 
       vars cli_vars push_from_args "$@"
 
