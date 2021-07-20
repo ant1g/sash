@@ -12,19 +12,53 @@ now_utc_pretty() { date -u +"%Y-%m-%dT%H:%M:%SZ" ; }
 println_err() { printf "%s\n" "$*" 1>&2 ; }
 println()     { printf "%s\n" "$*"      ; }
 
+with_color() {
+  local color_code="$1" ; shift
+  local pattern="${1:-.*}"
+  local line="$(cat -)"
+  local COLORS="${SASH_COLORS:-true}"
+
+  if [ "$COLORS" = "true" ] ; then
+    println "$line" | GREP_COLOR="01;${color_code}" \
+                      GREP_COLORS="mt=01;${color_code}" \
+                      grep --color=always "$pattern" || println "$line"
+  else
+    println "$line"
+  fi
+}
+
+blue()   { with_color 36 "$@" 1>&2 ; }
+blue2()  { with_color 34 "$@" 1>&2 ; }
+green()  { with_color 32 "$@" 1>&2 ; }
+grey()   { with_color 90 "$@" 1>&2 ; }
+purple() { with_color 35 "$@" 1>&2 ; }
+red()    { with_color 31 "$@" 1>&2 ; }
+yellow() { with_color 33 "$@" 1>&2 ; }
+
 log() {
   local lvl="$1" ; shift
   println_err "$(now_utc_pretty) [${lvl}] ~ ${*}"
 }
 
-debug() {
-  if [[ "$DEBUG" -gt "1" ]] ; then
-    log DEBUG "$@"
-  fi
+log_color() {
+  local lvl="$1"   ; shift
+  local color="$1" ; shift
+
+  println "$(now_utc_pretty) [${lvl}] ~ $*" | "$color" 1>&2 ;
 }
 
-info() { log INFO "$@"         ; }
-fail() { log FAIL "$@" ; false ; }
+info_blue() { log_color INFO  blue   "$@"         ; }
+info()      { log_color INFO  green  "$@"         ; }
+error()     { log_color ERROR red    "$@"         ; }
+warn()      { log_color WARN  yellow "$@"         ; }
+fail()      { log_color FAIL  red    "$@" ; false ; }
+debug() {
+  _DEBUG="${DEBUG:-0}"
+
+  if [[ "$_DEBUG" -gt "0" ]] ; then
+    log_color DEBUG grey "$@"
+  fi
+}
 
 trim() { local a=("$1") ; println "${a[*]}" ; }
 cnt_char() { println "$1" | awk -F ":" '{print NF-1}' ; }
@@ -383,6 +417,8 @@ EOS
 
     trap "rm -rf '${build_dir}'" 0
 
+    debug "deploying target '${target_dir}' on '${host}'"
+
     mkdir -p "$build_dir"
 
     build_target "$target_dir" "$build_dir"
@@ -394,6 +430,8 @@ EOS
     local runbook_dir="$(dirname "${runbook_path}")"
 
     file_exists "$runbook_path"
+
+    debug "deploying runbook '${runbook_path}'"
 
     vars cli_vars  push_from_args "$@"
     vars file_vars push_from_input <<<"$(vars_from_runbook "$runbook_path")"
