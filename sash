@@ -68,7 +68,6 @@ read_config_file() {
 # Write stdin data atomically to file, using a temporary file
 atomic_write() {
   local file="$(realpath "${1}")" ; shift
-
   local dir="$(dirname "${file}")"
   local tmp_file="${dir}/.$(rand_str).tmp"
 
@@ -96,16 +95,16 @@ sys.stdout.write(data) ; sys.stdout.flush()
 
   set -Cue -o pipefail
 
-  SCRIPT_NAME="$(basename "${0}")"
+  # Dirs
   THIS_DIR="$(cd "$(dirname "$(readlink "${0}" || printf "${0}")")" ; pwd)" # Absolute path to module
-  THIS_SCRIPT="${THIS_DIR}/${SCRIPT_NAME}"
-  DEBUG="${SASH_DEBUG:-false}"
-  WORK_DIR="${SASH_DIR:-"${PWD}"}"
+  THIS_SCRIPT="${THIS_DIR}/sash"
   TMP_DIR="${TMP_DIR:-/tmp}"
 
   required_commands=(date ssh tar gzip python)
 
   # Env
+  DEBUG="${SASH_DEBUG:-false}"
+  WORK_DIR="${SASH_DIR:-"${PWD}"}"
   SSH_CONTROL_PERSIST="${SASH_SSH_CONTROL_PERSIST:-2s}"
 
   # Check if all required commands are available
@@ -130,7 +129,6 @@ sys.stdout.write(data) ; sys.stdout.flush()
   }
 
   # Management of the arrays holding the different environment variables
-
   declare -n cli_vars_ref="cli_vars"   ; cli_vars=()
   declare -n file_vars_ref="file_vars" ; file_vars=()
   declare -n line_vars_ref="line_vars" ; line_vars=()
@@ -219,8 +217,8 @@ EOS
   build_target() {
     local build_dir="$1"  ; shift
     local target_dir="$1" ; shift
-
     local target="$(basename "${target_dir}")"
+
     dir_exists "$target_dir"
 
     # Prepare all environment variables
@@ -288,7 +286,6 @@ EOS
         include_item() {
           local src="$1" ; shift
           local dst="$1" ; shift
-
           local src_path="$(realpath "${src_dir}/${src}")"
           local dst_path="${dst_dir}/${dst}"
           local src_name="$(basename "${src_path}")"
@@ -328,7 +325,6 @@ EOS
     (
       build_dir="$1" ; shift
       host="$1"      ; shift
-
       remote_dir="sash"
       control_path="${TMP_DIR}/.$(rand_str).tmp"
 
@@ -364,7 +360,6 @@ EOS
   deploy_target() {
     local host="$1"       ; shift
     local target_dir="$1" ; shift
-
     local build_dir="${TMP_DIR}/.$(rand_str).tmp"
 
     trap "rm -rf '${build_dir}'" 0
@@ -377,7 +372,6 @@ EOS
 
   deploy_runbook() {
     local runbook_path="$(realpath "${1}")" ; shift
-
     local runbook_dir="$(dirname "${runbook_path}")"
 
     file_exists "$runbook_path"
