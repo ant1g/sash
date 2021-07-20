@@ -112,6 +112,7 @@ atomic_write() {
   local tmp_file="${dir}/.$(rand_str).tmp"
 
   cat > "$tmp_file"
+  sync "$tmp_file"
   mv "$tmp_file" "$file"
 }
 
