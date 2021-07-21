@@ -53,9 +53,9 @@ error()     { log_color ERROR red    "$@"         ; }
 warn()      { log_color WARN  yellow "$@"         ; }
 fail()      { log_color FAIL  red    "$@" ; false ; }
 debug() {
-  _DEBUG="${DEBUG:-0}"
+  DEBUG="${DEBUG:-0}"
 
-  if [[ "$_DEBUG" -gt "0" ]] ; then
+  if [ "$DEBUG" -gt 0 ] ; then
     log_color DEBUG grey "$@"
   fi
 }
@@ -70,7 +70,7 @@ cmd_exists()  { type "$1" >/dev/null 2>&1 || fail "command '${1}' not available"
 
 # Check if any argument contains a variable (ABC=123)
 args_contain_var() {
-  local var="$1" ; shift
+  local var="${1:?"var parameter required"}" ; shift
 
   local arg
   for arg in "$@" ; do
@@ -107,7 +107,8 @@ read_config_file() {
 
 # Write stdin data atomically to file, using a temporary file
 atomic_write() {
-  local file="$(realpath "${1}")" ; shift
+  local file="${1:?"file parameter required"}" ; shift
+  local file="$(realpath "${file}")"
   local dir="$(dirname "${file}")"
   local tmp_file="${dir}/.$(rand_str).tmp"
 
@@ -143,12 +144,13 @@ sys.stdout.write(data) ; sys.stdout.flush()
   required_commands=(date ssh tar gzip python)
 
   # Env
-  DEBUG="${SASH_DEBUG:-0}"
+  DEBUG="${SASH_DEBUG:-"0"}"
   WORK_DIR="${SASH_DIR:-"${PWD}"}"
-  SSH_CONTROL_PERSIST="${SASH_SSH_CONTROL_PERSIST:-2s}"
+  CLEAR_REMOTE_DIR="${SASH_CLEAR_REMOTE_DIR:-false}"
+  SSH_CONTROL_PERSIST="${SASH_SSH_CONTROL_PERSIST:-"2s"}"
 
   if [ "$DEBUG" == "true" ] ; then DEBUG="1" ; fi
-  if [ "$DEBUG" == "2"    ] ; then set -x    ; fi
+  if [ "$DEBUG" -eq 2     ] ; then set -x    ; fi
 
   # Check if all required commands are available
   check_dependencies() {
@@ -259,13 +261,13 @@ EOS
   }
 
   build_target() {
-    local target_dir="$1" ; shift
-    local build_dir="$1"  ; shift
+    local target_path="${1:?"target_path parameter required"}" ; shift
+    local build_dir="${1:?"build_dir parameter required"}"     ; shift
 
-    # Flavor in dir name
-    if [ "$(cnt_char "$target_dir")" == "1" ] ; then
-      local flavor="$(echo "$target_dir" | cut -d":" -f1)"
-      local target_dir="$(echo "$target_dir" | cut -d":" -f2)"
+    # Flavor can be in target name
+    if [ "$(cnt_char "$target_path")" -eq 1 ] ; then
+      local flavor="$(echo "$target_path" | cut -d":" -f1)"
+      local target_dir="$(echo "$target_path" | cut -d":" -f2)"
 
       vars line_vars push SASH_FLAVOR="$flavor"
     fi
@@ -338,8 +340,8 @@ EOS
         dst_dir="$build_dir"
 
         include_item() {
-          local src="$1" ; shift
-          local dst="$1" ; shift
+          local src="${1:?"src parameter required"}" ; shift
+          local dst="${1:?"dst parameter required"}" ; shift
           local src_path="$(realpath "${src_dir}/${src}")"
           local dst_path="${dst_dir}/${dst}"
           local src_name="$(basename "${src_path}")"
@@ -377,10 +379,30 @@ EOS
 
   deploy() {
     (
-      host="$1"      ; shift
-      build_dir="$1" ; shift
+      host="${1:?"host parameter required"}"           ; shift
+      build_dir="${1:?"build_dir parameter required"}" ; shift
       remote_dir="sash"
       control_path="${TMP_DIR}/.$(rand_str).tmp"
+
+      ssh_1() {
+        debug "establishing ssh connection to '$host'"
+        ssh \
+          -T \
+          -oControlMaster=yes \
+          -oControlPath="$control_path" \
+          -oControlPersist="$SSH_CONTROL_PERSIST" \
+          "$host" \
+          "$*"
+      }
+
+      ssh_2() {
+        debug "reusing ssh connection to '$host'"
+        ssh \
+          -tt \
+          -oControlPath="$control_path" \
+          "$host" \
+          "$*" 2>&1 | grep -v "Shared connection to .* closed." || true
+      }
 
       cleanup_connection() {
         ssh -O exit -oControlPath="$control_path" "$host" >/dev/null 2>&1
@@ -393,41 +415,38 @@ EOS
         cd "$build_dir"
 
         # Copy target
-        tar -f - -cz . | ssh \
-          -T \
-          -oControlMaster=yes \
-          -oControlPath="$control_path" \
-          -oControlPersist="$SSH_CONTROL_PERSIST" \
-          "$host" \
-          "mkdir -p \"${remote_dir}\" && tar -f - -C \"${remote_dir}\" -xz"
+        tar -f - -cz . \
+        | ssh_1 "mkdir -p "$remote_dir" && tar -f - -C "$remote_dir" -xz"
 
         # Re-use the previous ssh master session
-        ssh \
-          -tt \
-          -oControlPath="$control_path" \
-          "$host" \
-          "\"${remote_dir}/sash.script\""
+        ssh_2 "${remote_dir}/sash.script"
+
+        if [ "$CLEAR_REMOTE_DIR" == "true" ] ; then
+          debug "clearing remote dir '${remote_dir}'"
+          ssh_2 rm -rf "$remote_dir"
+        fi
       )
     )
   }
 
   deploy_target() {
-    local host="$1"       ; shift
-    local target_dir="$1" ; shift
+    local host="${1:?"host parameter required"}"               ; shift
+    local target_path="${1:?"target_path parameter required"}" ; shift
     local build_dir="${TMP_DIR}/.$(rand_str).tmp"
+
+    debug "deploying target '${target_path}' on '${host}'"
 
     trap "rm -rf '${build_dir}'" 0
 
-    debug "deploying target '${target_dir}' on '${host}'"
-
     mkdir -p "$build_dir"
 
-    build_target "$target_dir" "$build_dir"
-    deploy       "$host"       "$build_dir"
+    build_target "$target_path" "$build_dir"
+    deploy       "$host"        "$build_dir"
   }
 
   deploy_runbook() {
-    local runbook_path="$(realpath "${1}")" ; shift
+    local runbook_path="${1:?"runbook_path parameter required"}" ; shift
+    local runbook_path="$(realpath "${runbook_path}")"
     local runbook_dir="$(dirname "${runbook_path}")"
 
     file_exists "$runbook_path"
@@ -442,38 +461,53 @@ EOS
       read -a args <<< "$line"
       set -- ; set -- "${args[@]}" "$@"
 
-      host="$1"                    ; shift
-      target="${runbook_dir}/${1}" ; shift
+      local host="${1:?"runbook host parameter required"}"     ; shift
+      local target="${1:?"runbook target parameter required"}" ; shift
+      local target_path="${runbook_dir}/${target}"
 
       vars line_vars clear
       vars line_vars push_from_args "$@"
 
-      deploy_target "$host" "$target"
+      deploy_target "$host" "$target_path"
     done 3< <(targets_from_runbook "$runbook_path")
+  }
+
+  run_package() {
+    local target="${1:?"target parameter required"}" ; shift
+    # local target="$(basename "${target_dir}")"
+    # local package_name="${target}.sash.tgz"
+
+    # while [ "$#" -gt 0 ]; do
+    #   case "$1" in
+    #     -n | --name ) local package_name="$2" ;;
+    #     *           ) local package_name="$" ;;
+    #   esac
+    # done
   }
 
   run_deploy() {
     if [ -f "$1" ] ; then
       deploy_runbook "$@"
     else
-      host="$1"   ; shift
-      target="$1" ; shift
+      local host="${1:?"host parameter required"}"               ; shift
+      local target_path="${1:?"target_path parameter required"}" ; shift
 
       vars cli_vars push_from_args "$@"
 
-      deploy_target "$host" "$target"
+      deploy_target "$host" "$target_path"
     fi
   }
 
   check_dependencies "${required_commands[@]}"
 
-  test "$#" -eq 0 && { print_help ; exit ; }
+  [ "$#" -eq 0 ] && { print_help ; exit ; }
 
   cmd="$1"
   case "$cmd" in
-    "-h" | "--help"    | "help"   ) shift ; print_help    "$@" ; exit ;;
-    "-v" | "--version" | "version") shift ; print_version "$@" ; exit ;;
-    "-d" | "--deploy"  | "deploy" ) shift ; run_deploy    "$@" ; exit ;;
-    *                             )         run_deploy    "$@" ; exit ;;
+    "-h" | "--help"    | "help"    ) shift ; print_help    "$@" ; exit ;;
+    "-v" | "--version" | "version" ) shift ; print_version "$@" ; exit ;;
+    "-p" | "--package" | "package" ) shift ; run_package   "$@" ; exit ;;
+    "-d" | "--deploy"  | "deploy"  ) shift ; run_deploy    "$@" ; exit ;;
+    *                              )         run_deploy    "$@" ; exit ;;
   esac
 )
