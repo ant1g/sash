@@ -432,8 +432,18 @@ EOS
       while IFS= read -r -d '' file <&3 ; do
         dst_path="${file%.tpl}"
         cat "$file" | env_subst | atomic_write "$dst_path"
-        rm "$file"
       done 3< <(locate_template_files)
+    )
+
+    # Cleanup build dir
+    (
+      cd "$build_dir"
+
+      find . \
+          -type f \
+          \( -name "*.inc" -o -name "*.incl" -o -name "*.include" -o -name "*.includes" \
+             -o -name "*.tpl" -o -name "*.templ" -o -name "*.template" \) \
+          -delete
     )
   }
 
