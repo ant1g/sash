@@ -270,7 +270,50 @@ EOS
   }
 
   print_help() {
-    info "help"
+    (
+      println "Usage: sash [-hvpd] <RUNBOOK|HOSTNAME> <TARGET> [OPTIONS] [ENV_VARIABLES]" | blue "sash"
+      println ""
+      println "Deploy files and scripts (targets) on remote hosts over SSH."
+      println ""
+      println "  -h, --help                        show this help"
+      println "  -v, --version                     display version"
+      println "  -d, --deploy  RUNBOOK             targets defined in FILE or a specific"
+      println "                HOSTNAME TARGET     TARGET to be deployed on HOSTNAME"
+      println "  -p, --package TARGET              create an archive with the TARGET ready"
+      println "                                    to be deployed"
+      println ""
+      println "If no argument is provided, the deploy action will run."
+
+      case "${1:-}" in
+        -l | --long )
+          println ""
+          println "A TARGET is a folder containing files to be deployed, as well as an executable"
+          println "named 'deploy'. The whole content of the TARGET will be deployed to the remote"
+          println "host and the 'deploy' command will be executed."
+          println "It is possible to setup different variants or flavors for a TARGET."
+          println "See documentation and examples for more details."
+          println ""
+          println "Environment variables can be set in the RUNBOOK directly, or as extra"
+          println "command line arguments directly as key-value pairs."
+          println "These variables will be placed in a 'deploy.env' file on the remote host,"
+          println "as well as being sourced before executing the 'deploy' script."
+          println ""
+          println "This sash script will also be uploaded to the remote host during deployment," | blue "sash"
+          println "where it can be sourced and used for its utility functions, or used again to deploy"
+          println "targets to other remote hosts."
+          println ""
+          println "Examples:"
+          println ""
+          println "sash etc/hosts.prd MY_VERSION=1.0.0 MY_INSTALL_DIR=/opt/myapp" | grey
+          println "sash example.com flavor1:my-target MY_INSTALL_DIR=/opt/myapp" | grey
+          println "sash example.com my-target SASH_FLAVOR=flavor1 MY_INSTALL_DIR=/opt/myapp" | grey
+          println "sash --package my-target VERSION=2.0.0 MY_INSTALL_DIR=/opt/myapp > package.tgz" | grey
+          println "sash --package my-target --file package.tgz VERSION=2.0.0 MY_INSTALL_DIR=/opt/myapp" | grey
+          println ""
+          println "The SSH authentication is for the user to arrange (~/.ssh/config)"
+          ;;
+      esac
+    ) 1>&2
   }
 
   print_version() {
