@@ -118,7 +118,7 @@ atomic_write() {
 }
 
 # Interpolate all environment variables present in input
-# Can be optimized...
+# TODO Can be optimized...
 env_subst() {
   python -c '''
 import os, sys
@@ -132,7 +132,7 @@ sys.stdout.write(data) ; sys.stdout.flush()
 
 get_opt() {
   local name="${OPT_NAME:?"name parameter required"}" ; shift
-  local default="${OPT_DEFAULT:-}" ; shift
+  local default="${OPT_DEFAULT:-}"                    ; shift
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -143,6 +143,7 @@ get_opt() {
     esac
     shift
   done
+
   println "$default"
 }
 
@@ -495,22 +496,27 @@ EOS
     local build_dir="${TMP_DIR}/.$(rand_str).tmp"
     local tmp_file="${TMP_DIR}/.$(rand_str).tmp"
 
-    # trap "rm -rf '${build_dir}' '${tmp_file}'"
+    trap "rm -rf '${build_dir}' '${tmp_file}'" 0
 
-    # vars cli_vars push_from_args "$@"
+    vars cli_vars push_from_args "$@"
 
-    # build_target "$target_path" "$build_dir"
+    mkdir -p "$build_dir"
 
-    # (
-    #   cd "$build_dir"
+    build_target "$target_path" "$build_dir"
 
-    #   if [ "$output_path" == "-" ] ; then
-    #     tar -czf - .
-    #   else
-    #     tar -czf "$tmp_file" .
-    #     mv "$tmp_file" "$output_path"
-    #   fi
-    # )
+    if [ "$output_path" == "-" ] ; then
+      (
+        cd "$build_dir"
+        tar -czf - .
+      )
+    else
+      (
+        cd "$build_dir"
+        tar -czf "$tmp_file" .
+        sync "$tmp_file"
+      )
+      mv "$tmp_file" "$output_path"
+    fi
   }
 
   run_deploy() {
