@@ -387,7 +387,6 @@ EOS
     (
       locate_include_files() {
         find . \
-          -maxdepth 1 -mindepth 1 \
           -type f \
           \( -name "*.inc" -o -name "*.incl" -o -name "*.include" -o -name "*.includes" \) \
           -print0
@@ -421,7 +420,6 @@ EOS
     (
       locate_template_files() {
         find . \
-          -maxdepth 1 -mindepth 1 \
           -type f \
           \( -name "*.tpl" -o -name "*.templ" -o -name "*.template" \) \
           -print0
