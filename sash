@@ -180,9 +180,9 @@ get_opt() {
     fi
   }
 
-  # Read top vars from runbook
+  # Read top vars from runbook and returns them as one line
   vars_from_runbook() {
-    read_config_file "$1" | env_subst | grep -v ".*[[:space:]].*" | grep "="
+    read_config_file "$1" | env_subst | grep -v ".*[[:space:]].*" | grep "=" | xargs || true  # There might be none
   }
 
   # Read all target lines from runbook
@@ -208,14 +208,6 @@ get_opt() {
       if ! args_contain_var "$name" "${v[@]}" ; then
         v+=("$var_line")
       fi
-    }
-
-    # Read variables from stdin and append them to $vars, existing in the outer scope
-    push_from_input() {
-      local var_line
-      while IFS= read -r var_line <&3 ; do
-        push "$(trim "${var_line}")"
-      done 3< <(cat -)
     }
 
     # Read variables from the arguments and append them to $vars, existing in the outer scope
@@ -326,8 +318,8 @@ EOS
 
     # Flavor can be in target name
     if [ "$(cnt_char "$target_path")" -eq 1 ] ; then
-      local flavor="$(echo "$target_path" | cut -d":" -f1)"
-      local target_path="$(echo "$target_path" | cut -d":" -f2)"
+      local flavor="$(println "$target_path" | cut -d":" -f1)"
+      local target_path="$(println "$target_path" | cut -d":" -f2)"
 
       vars line_vars push SASH_FLAVOR="$flavor"
     fi
@@ -521,8 +513,10 @@ EOS
 
     debug "deploying runbook '${runbook_path}'"
 
-    vars cli_vars  push_from_args "$@"
-    vars file_vars push_from_input <<<"$(vars_from_runbook "$runbook_path")"
+    vars cli_vars push_from_args "$@"
+
+    read -a runbook_vars <<< "$(vars_from_runbook "$runbook_path")"
+    vars file_vars push_from_args "${runbook_vars[@]}"
 
     while read line <&3 ; do
       # Transform all elements of the line as positional arguments
