@@ -351,6 +351,55 @@ EOS
     # Make sure all variables are available in this scope
     export_env_file "${build_dir}/deploy.env"
 
+    # Handle include files
+    handle_includes() {
+      local src_dir="${1:?"src_dir parameter required"}"       ; shift
+      local dst_dir="${1:?"dst_dir parameter required"}"       ; shift
+      local select_fun="${1:?"select_fun parameter required"}" ; shift
+
+      select_include_files_no_flavors() {
+        find . \
+          -type f \
+          \( -name "*.inc" -o -name "*.incl" -o -name "*.include" -o -name "*.includes" \) \
+          -and \
+          \( -not -path "*flavors*" \) \
+          -print0
+      }
+
+      select_include_files() {
+        find . \
+          -type f \
+          \( -name "*.inc" -o -name "*.incl" -o -name "*.include" -o -name "*.includes" \) \
+          -print0
+      }
+
+      (
+        cd "$src_dir"
+
+        while IFS= read -r -d '' file <&3 ; do
+          include_dir="$(cd "$(dirname "${src_dir}/${file}")" ; pwd)"
+
+          include_item() {
+            local src="${1:?"src parameter required"}" ; shift
+            local dst="${1:?"dst parameter required"}" ; shift
+            local item_src_path="$(realpath "${include_dir}/${src}")"
+            local item_name="$(basename "${item_src_path}")"
+            local item_dst_path="$(realpath "${dst_dir}/${dst}")"
+            local item_dst_dir="$(dirname "${item_dst_path}")"
+
+            info "including item '${item_name}'"
+            mkdir -p "$item_dst_dir"
+            cp -r "$item_src_path" "$item_dst_path"
+          }
+
+          while IFS= read -r line <&4 ; do
+            read -a args <<< "$line"
+            include_item "${args[@]}"
+          done 4< <(read_config_file "$file" | env_subst)
+        done 3< <("$select_fun")
+      )
+    }
+
     # Include content of target dir
     (
       cd "$target_dir"
@@ -358,13 +407,14 @@ EOS
       find . -mindepth 1 -maxdepth 1 \
         -not -name "flavors" \
         -exec cp -r '{}' "$build_dir" ';'
+
+      handle_includes "$target_dir" "$build_dir" select_include_files_no_flavors
     )
 
     # Select the correct flavor separately
     local flavor="${SASH_FLAVOR:-}"
-    local flavor_dir="${target_dir}/flavors/${flavor}"
-
     test -z "$flavor" || (
+      local flavor_dir="${target_dir}/flavors/${flavor}"
       dir_exists "$flavor_dir"
 
       cd "$flavor_dir"
@@ -373,44 +423,13 @@ EOS
 
       find . -mindepth 1 -maxdepth 1 \
         -exec cp -r '{}' "${build_dir}/flavor" ';'
-    )
 
-    # Handle include files
-    (
-      locate_include_files() {
-        find . \
-          -type f \
-          \( -name "*.inc" -o -name "*.incl" -o -name "*.include" -o -name "*.includes" \) \
-          -print0
-      }
-
-      cd "$target_dir"
-
-      while IFS= read -r -d '' file <&3 ; do
-        src_dir="$(cd "$(dirname "${target_dir}/${file}")" ; pwd)"
-        dst_dir="$build_dir"
-
-        include_item() {
-          local src="${1:?"src parameter required"}" ; shift
-          local dst="${1:?"dst parameter required"}" ; shift
-          local src_path="$(realpath "${src_dir}/${src}")"
-          local dst_path="${dst_dir}/${dst}"
-          local src_name="$(basename "${src_path}")"
-
-          info "including item '${src_name}'"
-          cp -r "$src_path" "$dst_path"
-        }
-
-        while IFS= read -r line <&4 ; do
-          read -a args <<< "$line"
-          include_item "${args[@]}"
-        done 4< <(read_config_file "$file" | env_subst)
-      done 3< <(locate_include_files)
+      handle_includes "$flavor_dir" "${build_dir}/flavor" select_include_files
     )
 
     # Handle template files
     (
-      locate_template_files() {
+      select_template_files() {
         find . \
           -type f \
           \( -name "*.tpl" -o -name "*.templ" -o -name "*.template" \) \
@@ -422,7 +441,7 @@ EOS
       while IFS= read -r -d '' file <&3 ; do
         dst_path="${file%.tpl}"
         cat "$file" | env_subst | atomic_write "$dst_path"
-      done 3< <(locate_template_files)
+      done 3< <(select_template_files)
     )
 
     # Cleanup build dir

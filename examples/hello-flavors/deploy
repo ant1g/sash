@@ -10,4 +10,8 @@ hello_env() {
   cat flavor/hello
 }
 
-echo "$(hello "${HELLO_LANG}") $(hello_env)!"
+hello_spec() {
+  cat flavor/spec
+}
+
+echo "$(hello "${HELLO_LANG}") $(hello_spec) $(hello_env)!"
