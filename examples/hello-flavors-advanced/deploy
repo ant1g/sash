@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+set -Cue -o pipefail
+
+hello() {
+  cat hello.json | ./json_get "$1"
+}
+
+hello_env() {
+  cat flavor/hello
+}
+
+hello_spec() {
+  cat flavor/spec
+}
+
+echo "$(hello "${HELLO_LANG}") $(hello_spec) $(hello_env)!"

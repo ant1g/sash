@@ -1,5 +1,4 @@
-HELLO_ENV=acc
+SAY="Hi!"
 
-example.host ../hello-templates HELLO_LANG=french
-example.host ../hello-templates HELLO_LANG=dutch HELLO_ENV=prd
-example.host ../hello-templates HELLO_LANG=english
+example.host ../hello
+example.host ../hello SAY="Goodbye"
