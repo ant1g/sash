@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+set -Cue -o pipefail
+
+say="${SAY:-"Hello world!"}"
+
+echo "$say"

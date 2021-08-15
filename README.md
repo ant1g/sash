@@ -1,28 +1,56 @@
-# sash - setup and administer your hosts over ssh
+# sash - setup and administer your hosts over SSH
 
-A simple utility to deploy targets (configuration, scripts) to remote hosts over ssh.
+A simple utility to deploy targets (configuration, scripts) to remote hosts over SSH.
 
 ## Installation
 
+Installing it is straighforward, because sash consists only of a single script.
+
 ```bash
-curl -O --output-dir /usr/local/bin https://raw.githubusercontent.com/ant1g/sash/master/sash
+curl -O --output-dir /usr/local/bin/ https://raw.githubusercontent.com/ant1g/sash/master/sash
 ```
 or
 ```bash
-wget -P /usr/local/bin https://raw.githubusercontent.com/ant1g/sash/master/sash
+wget -P /usr/local/bin/ https://raw.githubusercontent.com/ant1g/sash/master/sash
 ```
 
-Note that `/usr/local/bin` can be replaced with a different directory that is on your `PATH`.
+Note that `/usr/local/bin/` can be replaced with a different directory that is on your `$PATH`, such as `~/bin/` or `~/.local/bin`.
 
-Make it executable:
-
+Don't forget to make it executable:
 ```bash
 chmod +x /usr/local/bin/sash
 ```
 
-## Help
-
+To uninstall, simply remove the sash script:
+```bash
+rm /usr/local/bin/sash
 ```
+
+## Getting started
+
+A deployment target is simply a folder, say `hello`, that contains an executable file called `deploy`.
+
+In this `deploy` executable contains the deployment logic that the developer sees fit.
+
+Example:
+```bash
+sash example.host examples/hello
+```
+
+This will upload the `hello` target and run the `deploy` executable on the remote host `example.host`, over the SSH protocol with the OpenSSH client.
+
+The SSH authentication configuration should be done by the developer in `~/.ssh/config`, for more information please consult the [official documentation](https://www.ssh.com/academy/ssh/config).
+
+Configuration can be given to the deployment script as follows:
+```bash
+sash example.host examples/hello SAY="Hi!"
+```
+
+This will set a `SAY` variable available in the environment of the script.
+
+## Help screen
+
+```bash
 Usage: sash [-hvpd] <RUNBOOK|HOSTNAME> <TARGET> [OPTIONS] [ENV_VARIABLES]
 
 Deploy files and scripts (targets) on remote hosts over SSH.
@@ -35,29 +63,4 @@ Deploy files and scripts (targets) on remote hosts over SSH.
                                     to be deployed
 
 If no argument is provided, the deploy action will run.
-
-A TARGET is a folder containing files to be deployed, as well as an executable
-named 'deploy'. The whole content of the TARGET will be deployed to the remote
-host and the 'deploy' command will be executed.
-It is possible to setup different variants or flavors for a TARGET.
-See documentation and examples for more details.
-
-Environment variables can be set in the RUNBOOK directly, or as extra
-command line arguments directly as key-value pairs.
-These variables will be placed in a 'deploy.env' file on the remote host,
-as well as being sourced before executing the 'deploy' script.
-
-This sash script will also be uploaded to the remote host during deployment,
-where it can be sourced and used for its utility functions, or used again to deploy
-targets to other remote hosts.
-
-Examples:
-
-sash etc/hosts.prd MY_VERSION=1.0.0 MY_INSTALL_DIR=/opt/myapp
-sash example.com flavor1:my-target MY_INSTALL_DIR=/opt/myapp
-sash example.com my-target SASH_FLAVOR=flavor1 MY_INSTALL_DIR=/opt/myapp
-sash --package my-target VERSION=2.0.0 MY_INSTALL_DIR=/opt/myapp > package.tgz
-sash --package my-target --file package.tgz VERSION=2.0.0 MY_INSTALL_DIR=/opt/myapp
-
-The SSH authentication is for the user to arrange (~/.ssh/config)
 ```
