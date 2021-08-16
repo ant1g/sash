@@ -68,6 +68,14 @@ dir_exists()  { test -d "$1" || fail "directory '${1}' not found"               
 cmds_exist()  { type "$@" >/dev/null 2>&1 || fail "some commands in [${@}] are not available" ; }
 cmd_exists()  { type "$1" >/dev/null 2>&1 || fail "command '${1}' not available"              ; }
 
+# Print each function argument as a new line
+print_args() {
+  local arg
+  for arg in "$@"; do
+    println "$arg"
+  done
+}
+
 # Check if any argument contains a variable (ABC=123)
 args_contain_var() {
   local var="${1:?"var parameter required"}" ; shift
@@ -81,12 +89,9 @@ args_contain_var() {
   return 1
 }
 
-# Print each function argument as a new line
-print_args() {
-  local arg
-  for arg in "$@"; do
-    println "$arg"
-  done
+# Output earch variable (ABC=123) from the arguments as a new line
+vars_in_args() {
+  bash -c "printf '%q\n' $*"
 }
 
 # Export content of given env file in current shell
@@ -449,10 +454,10 @@ EOS
       cd "$build_dir"
 
       find . \
-          -type f \
-          \( -name "*.inc" -o -name "*.incl" -o -name "*.include" -o -name "*.includes" \
-             -o -name "*.tpl" -o -name "*.templ" -o -name "*.template" \) \
-          -delete
+        -type f \
+        \( -name "*.inc" -o -name "*.incl" -o -name "*.include" -o -name "*.includes" \
+            -o -name "*.tpl" -o -name "*.templ" -o -name "*.template" \) \
+        -delete
     )
   }
 
@@ -495,7 +500,7 @@ EOS
 
         # Copy target
         tar -f - -cz . \
-        | ssh_1 "mkdir -p "$remote_dir" && tar -f - -C "$remote_dir" -xz"
+          | ssh_1 "mkdir -p "$remote_dir" && tar -f - -C "$remote_dir" -xz"
 
         # Re-use the previous ssh master session
         ssh_2 "${remote_dir}/sash.script"
@@ -532,22 +537,26 @@ EOS
 
     debug "deploying runbook '${runbook_path}'"
 
+    # Parse variables on command line
     vars cli_vars push_from_args "$@"
 
-    read -a runbook_vars <<< "$(vars_from_runbook "$runbook_path")"
-    vars file_vars push_from_args "${runbook_vars[@]}"
+    # Parse variables at top of runbook
+    read -a vars_in_runbook <<< "$(vars_from_runbook "$runbook_path")"
+    vars file_vars push_from_args "${vars_in_runbook[@]}"
 
     while read line <&3 ; do
       # Transform all elements of the line as positional arguments
-      read -a args <<< "$line"
-      set -- ; set -- "${args[@]}" "$@"
+      read -a line_args <<< "$line"
+      set -- ; set -- "${line_args[@]}" "$@"
 
       local host="${1:?"runbook host parameter required"}"     ; shift
       local target="${1:?"runbook target parameter required"}" ; shift
       local target_path="${runbook_dir}/${target}"
 
+      # Parse variables on current host / target line of the runbook
+      read -a vars_on_line <<< "$(vars_in_args "$@")"
       vars line_vars clear
-      vars line_vars push_from_args "$@"
+      vars line_vars push_from_args "${vars_on_line[@]}"
 
       deploy_target "$host" "$target_path"
     done 3< <(targets_from_runbook "$runbook_path")
@@ -590,6 +599,7 @@ EOS
       local host="${1:?"host parameter required"}"               ; shift
       local target_path="${1:?"target_path parameter required"}" ; shift
 
+      # Parse variables on command line
       vars cli_vars push_from_args "$@"
 
       deploy_target "$host" "$target_path"
