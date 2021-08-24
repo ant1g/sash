@@ -61,7 +61,7 @@ debug() {
 }
 
 trim() { local a=("$1") ; println "${a[*]}" ; }
-cnt_char() { println "$1" | awk -F ":" '{print NF-1}' ; }
+cnt_char() { println "$1" | awk -F "$2" '{print NF-1}' ; }
 
 file_exists() { test -f "$1" || fail "file '${1}' not found"                                  ; }
 dir_exists()  { test -d "$1" || fail "directory '${1}' not found"                             ; }
@@ -302,7 +302,7 @@ EOS
           println "Examples:"
           println ""
           println "sash etc/hosts.prd MY_VERSION=1.0.0 MY_INSTALL_DIR=/opt/myapp" | grey
-          println "sash example.com flavor1:my-target MY_INSTALL_DIR=/opt/myapp" | grey
+          println "sash example.com my-target:flavor1 MY_INSTALL_DIR=/opt/myapp" | grey
           println "sash example.com my-target SASH_FLAVOR=flavor1 MY_INSTALL_DIR=/opt/myapp" | grey
           println "sash --package my-target VERSION=2.0.0 MY_INSTALL_DIR=/opt/myapp > package.tgz" | grey
           println "sash --package my-target --file package.tgz VERSION=2.0.0 MY_INSTALL_DIR=/opt/myapp" | grey
@@ -322,9 +322,9 @@ EOS
     local build_dir="${1:?"build_dir parameter required"}"     ; shift
 
     # Flavor can be in target name
-    if [ "$(cnt_char "$target_path")" -eq 1 ] ; then
-      local flavor="$(println "$target_path" | cut -d":" -f1)"
-      local target_path="$(println "$target_path" | cut -d":" -f2)"
+    if [ "$(cnt_char "$target_path" ":")" -eq 1 ] ; then
+      local flavor="$(println "$target_path" | cut -d":" -f2)"
+      local target_path="$(println "$target_path" | cut -d":" -f1)"
 
       vars line_vars push SASH_FLAVOR="$flavor"
     fi

@@ -127,7 +127,7 @@ Flavors are simply sub-folders that are put in a `flavors/` folder in the target
 
 A target with a specific flavor can be deployed like this:
 ```bash
-sash example.host acc:hello-flavors
+sash example.host hello-flavors:acc
 ```
 or
 ```bash
@@ -135,8 +135,6 @@ sash example.host hello-flavors SASH_FLAVOR=acc
 ```
 
 When a flavor is selected as such, its content will be available on the remote host in the `flavor/` folder.
-
-
 
 ## Help screen
 
