@@ -329,10 +329,10 @@ EOS
       vars line_vars push SASH_FLAVOR="$flavor"
     fi
 
+    dir_exists "$target_path"
+
     local target_dir="$(realpath "${target_path}")"
     local target="$(basename "${target_dir}")"
-
-    dir_exists "$target_dir"
 
     # Prepare all environment variables
     vars all_vars merge_all
@@ -485,7 +485,7 @@ EOS
           -tt \
           -oControlPath="$control_path" \
           "$host" \
-          "$*" 2>&1 | grep -v "Shared connection to .* closed." || true
+          "$*"
       }
 
       cleanup_connection() {
