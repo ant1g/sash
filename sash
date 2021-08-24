@@ -530,10 +530,11 @@ EOS
 
   deploy_runbook() {
     local runbook_path="${1:?"runbook_path parameter required"}" ; shift
-    local runbook_path="$(realpath "${runbook_path}")"
-    local runbook_dir="$(dirname "${runbook_path}")"
 
     file_exists "$runbook_path"
+
+    local runbook_dir="$(dirname "${runbook_path}")"
+    local runbook_path="$(realpath "${runbook_path}")"
 
     debug "deploying runbook '${runbook_path}'"
 
