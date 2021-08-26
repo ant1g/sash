@@ -187,7 +187,7 @@ get_opt() {
 
   # Read top vars from runbook and returns them as one line
   vars_from_runbook() {
-    read_config_file "$1" | env_subst | grep -v ".*[[:space:]].*" | grep "=" | xargs || true  # There might be none
+    read_config_file "$1" | env_subst | grep -v ".*[[:space:]].*" | grep "=" || true  # There might be none
   }
 
   # Read all target lines from runbook
@@ -386,9 +386,10 @@ EOS
 
           include_item() {
             local src="${1:?"src parameter required"}" ; shift
-            local dst="${1:?"dst parameter required"}" ; shift
             local item_src_path="$(realpath "${include_dir}/${src}")"
             local item_name="$(basename "${item_src_path}")"
+
+            local dst="${1:-"${item_name}"}"
             local item_dst_path="$(realpath "${dst_dir}/${dst}")"
             local item_dst_dir="$(dirname "${item_dst_path}")"
 
@@ -542,22 +543,20 @@ EOS
     vars cli_vars push_from_args "$@"
 
     # Parse variables at top of runbook
-    read -a vars_in_runbook <<< "$(vars_from_runbook "$runbook_path")"
+    readarray -t vars_in_runbook <<< "$(vars_from_runbook "$runbook_path")"
     vars file_vars push_from_args "${vars_in_runbook[@]}"
 
     while read line <&3 ; do
       # Transform all elements of the line as positional arguments
-      read -a line_args <<< "$line"
+      readarray -t line_args <<< "$(vars_in_args "$line")"
       set -- ; set -- "${line_args[@]}" "$@"
 
       local host="${1:?"runbook host parameter required"}"     ; shift
       local target="${1:?"runbook target parameter required"}" ; shift
       local target_path="${runbook_dir}/${target}"
 
-      # Parse variables on current host / target line of the runbook
-      read -a vars_on_line <<< "$(vars_in_args "$@")"
       vars line_vars clear
-      vars line_vars push_from_args "${vars_on_line[@]}"
+      vars line_vars push_from_args "$@"
 
       deploy_target "$host" "$target_path"
     done 3< <(targets_from_runbook "$runbook_path")
