@@ -163,7 +163,7 @@ get_opt() {
   THIS_SCRIPT="${THIS_DIR}/sash"
   TMP_DIR="${TMP_DIR:-/tmp}"
 
-  required_commands=(date ssh tar gzip python)
+  required_commands=(readarray date ssh tar gzip python)
 
   # Env
   DEBUG="${SASH_DEBUG:-"0"}"
