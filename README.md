@@ -111,11 +111,18 @@ In a file that ends with the extension `*.inc`, `*.incl`, `*.include` or `*.incl
 
 Example content of an include file:
 ```
-../hello.shared.json hello.json
+../hello.shared.json
 ```
 
-The left element is the source file to be included, and the right one is the destination name.
-It also serves as way to rename or move included files, at deployment time.
+This will include the file `../hello.shared.json` and put it at the root of the remote deployment folder.
+Note that file paths in the include file are relative to the folder where the include file itself is located.
+
+It is possible to use includes to do rename or move operations for convenience.
+```
+../hello.shared.json sub/hello.json
+```
+
+The destination parent folder will be created if it does not exist.
 
 ### Flavors
 
