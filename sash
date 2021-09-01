@@ -343,9 +343,9 @@ EOS
     (
       cd "$build_dir"
 
-      cp "${THIS_SCRIPT}" .
+      cp "$THIS_SCRIPT" .
       sash_script > sash.script
-      chmod +x "${THIS_SCRIPT}" sash.script
+      chmod +x sash sash.script
 
       # Gather all variables in a single env file
       print_args \
