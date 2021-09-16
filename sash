@@ -390,7 +390,7 @@ EOS
             local item_name="$(basename "${item_src_path}")"
 
             local dst="${1:-"${item_name}"}"
-            local item_dst_path="$(realpath "${dst_dir}/${dst}")"
+            local item_dst_path="${dst_dir}/${dst}"
             local item_dst_dir="$(dirname "${item_dst_path}")"
 
             info "including item '${item_name}'"
