@@ -101,13 +101,27 @@ export_env_file() {
   done 3< <(cat "$1" | grep "=")
 }
 
+# Config lines, comments and empty lines are ignored
+read_config_lines() {
+  (
+    while read line <&3 ; do
+      trim "$line"
+    done 3< <(cat - | grep -v "^#.*\|^$")
+  )
+}
+
 # Read config file, comments and empty lines are ignored
 read_config_file() {
+  cat "$1" | read_config_lines
+}
+
+# Make env input exportable
+make_env_exportable() {
   (
-    while IFS= read -r line <&3 ; do
-      trim "$line"
-    done 3< "$1"
-   ) | grep -v "^#.*\|^$"
+    while read line <&3 ; do
+      println "export ${line}"
+    done 3< <(cat - | grep "=")
+  )
 }
 
 # Write stdin data atomically to file, using a temporary file
