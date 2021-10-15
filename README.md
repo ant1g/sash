@@ -2,7 +2,9 @@
 
 A simple utility to deploy targets (configuration, scripts) to remote hosts over SSH.
 
-## Installation
+## Usage
+
+### Installation
 
 Installing it is straighforward, because sash consists only of a single script.
 
@@ -26,7 +28,7 @@ To uninstall, simply remove the sash script:
 rm /usr/local/bin/sash
 ```
 
-## Getting started
+### Getting started
 
 A deployment target is simply a folder, say `hello`, that contains an executable file called `deploy`.
 
@@ -48,9 +50,9 @@ sash example.host examples/hello SAY="Hi!"
 
 This will set a `SAY` variable available in the environment of the script (call it the deployment environment).
 
-## Advanced usage
+### Advanced usage
 
-### Runbooks
+#### Runbooks
 
 A set of targets can be bundled together in runbooks.
 
@@ -85,7 +87,7 @@ The order of variable precedence is as follows:
 
 `Command line` > `Host / Target line in runbook` > `Top level variables in runbook`
 
-### Templates
+#### Templates
 
 Any file that ends with the extension `*.tpl`, `*.templ` or `*.template` in the target will be parsed and environment variables it contains will be expanded to the variables available during deployment (the variables put in runbooks or on the command line).
 
@@ -103,7 +105,7 @@ Will be deployed as `vars.json` and the environment variables `${HELLO_LANG}` an
 
 Important, if these variables are not set, the expension will result in an empty string.
 
-### Includes
+#### Includes
 
 Includes are useful when a target needs to deploy files that cannot be put in the target folder itself, or when some files need to be shared between targets.
 
@@ -124,7 +126,7 @@ It is possible to use includes to do rename or move operations for convenience.
 
 The destination parent folder will be created if it does not exist.
 
-### Flavors
+#### Flavors
 
 It can be useful sometimes to have multiple variations of the same deployment target. A good example of that is when deployment slightly vary between running environments such as acceptance and production.
 
@@ -143,7 +145,7 @@ sash example.host hello-flavors SASH_FLAVOR=acc
 
 When a flavor is selected as such, its content will be available on the remote host in the `flavor/` folder.
 
-## Help screen
+### Help screen
 
 ```bash
 Usage: sash [-hvpd] <RUNBOOK|HOSTNAME> <TARGET> [OPTIONS] [ENV_VARIABLES]
@@ -159,3 +161,9 @@ Deploy files and scripts (targets) on remote hosts over SSH.
 
 If no argument is provided, the deploy action will run.
 ```
+
+## Contributing
+
+You can contribute to this repo via pull-requests.
+
+Code checks can be run with `make check`, it uses the *shellcheck* for this purpose.
