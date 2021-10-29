@@ -1,7 +1,9 @@
-.PHONY: test check
+.PHONY: all check test
 
-test:
-	tests/run_tests
+all: check test
 
 check:
 	shellcheck ./sash
+
+test:
+	tests/run_tests

@@ -8,4 +8,7 @@ jobs:
       - uses: actions/setup-python@v2
         with:
           python-version: '3.9'
-      - run: tests/run_tests
+      - name: checks
+        run: make check
+      - name: tests
+        run: make test
