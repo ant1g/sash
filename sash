@@ -112,7 +112,7 @@ read_config_lines() {
 
 # Read config file, comments and empty lines are ignored
 read_config_file() {
-  cat "$1" | read_config_lines
+  read_config_lines < "$1"
 }
 
 # Make env input exportable
@@ -464,7 +464,7 @@ EOS
 
       while IFS= read -r -d '' file <&3 ; do
         dst_path="${file%.tpl}"
-        cat "$file" | env_subst | atomic_write "$dst_path"
+        env_subst < "$file" | atomic_write "$dst_path"
       done 3< <(select_template_files)
     )
 
