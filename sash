@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-SASH_VERSION="0.1.0"
+SASH_VERSION="0.1.1"
 
 # Library section
 
@@ -89,16 +89,38 @@ args_contain_var() {
   return 1
 }
 
-# Output earch variable (ABC=123) from the arguments as a new line
+# Output each item from the arguments as a new line
+# It is necessary to handle correctly the arguments that have quoted spaces
 vars_in_args() {
-  bash -c "printf '%q\n' $*"
+  bash -c "printf '%s\n' $*"
+}
+
+# requote value for key-value pair if no quotes are present
+requote() {
+  local entry="$1" ; shift
+
+  is_value_quoted() {
+    println "$entry" | grep "=\"" >/dev/null 2>&1
+  }
+
+  if is_value_quoted ; then
+    println "$entry"
+  else
+    local key="${entry%%=*}"
+    local value="${entry#*=}"
+
+    println "${key}=\"${value}\""
+  fi
 }
 
 # Export content of given env file in current shell
 export_env_file() {
-  while read -r _sash_export_var <&3 ; do
-    export "$(trim "${_sash_export_var}")"
-  done 3< <(grep "=" < "$1")
+  env_file="$1" ; shift
+
+  set -a
+  # shellcheck disable=SC1090
+  . "$env_file"
+  set +a
 }
 
 # Config lines, comments and empty lines are ignored
@@ -113,15 +135,6 @@ read_config_lines() {
 # Read config file, comments and empty lines are ignored
 read_config_file() {
   read_config_lines < "$1"
-}
-
-# Make env input exportable
-make_env_exportable() {
-  (
-    while read -r line <&3 ; do
-      println "export ${line}"
-    done 3< <(cat - | grep "=")
-  )
 }
 
 # Write stdin data atomically to file, using a temporary file
@@ -210,21 +223,30 @@ get_opt() {
   }
 
   # Management of the arrays holding the different environment variables
+
+  # Container for variables coming from the command line arguments
   # shellcheck disable=SC2034
-  declare -n cli_vars_ref="cli_vars" ; cli_vars=()
+  declare -n _cli_vars_ref="cli_vars" ; cli_vars=()
+  # Container for variables coming from runbook files
   # shellcheck disable=SC2034
-  declare -n file_vars_ref="file_vars" ; file_vars=()
+  declare -n _file_vars_ref="file_vars" ; file_vars=()
+  # Container for variables coming from target lines in runbook files
   # shellcheck disable=SC2034
-  declare -n line_vars_ref="line_vars" ; line_vars=()
+  declare -n _line_vars_ref="line_vars" ; line_vars=()
+  # Container for internal / meta variables such as the target or flavor data
   # shellcheck disable=SC2034
-  declare -n all_vars_ref="all_vars" ; all_vars=()
+  declare -n _meta_vars_ref="meta_vars" ; meta_vars=()
+
+  # Container for merging the above variables before deploy
+  # shellcheck disable=SC2034
+  declare -n _all_vars_ref="all_vars" ; all_vars=()
 
   vars() {
     # Grab the array from its name
     local vars_name="$1" ; shift
     local -n v="$vars_name"
 
-    push() {
+    _push() {
       local var_line="$1" ; shift
       local name="${var_line%%=*}"
 
@@ -233,29 +255,30 @@ get_opt() {
       fi
     }
 
+    _merge() {
+      for var in "$@" ; do
+        _push "$var"
+      done
+    }
+
+    empty() {
+      v=()
+    }
+
     # Read variables from the arguments and append them to $vars, existing in the outer scope
     push_from_args() {
-      local var_line
-      for var_line in "$@" ; do
-        if [[ "$var_line" == *"="* ]]; then # Only consider args with = ([[ needed for globbing)
-          push "$var_line"
+      local var_entry
+      for var_entry in "$@" ; do
+        if [[ "$var_entry" == *"="* ]]; then # Only consider args with = ([[ needed for globbing)
+          _push "$(requote "$var_entry")"
         fi
       done
     }
 
-    merge() {
-      for var in "$@" ; do
-        push "$var"
-      done
-    }
-
-    clear() {
-      v=()
-    }
-
+    # All other var containers are merged into all_vars in precedence order
     merge_all() {
-      clear
-      merge "${cli_vars[@]}" "${line_vars[@]}" "${file_vars[@]}"
+      empty
+      _merge "${meta_vars[@]}" "${cli_vars[@]}" "${line_vars[@]}" "${file_vars[@]}"
     }
 
     "$@"
@@ -341,16 +364,18 @@ EOS
 
     # Flavor can be in target name
     if [ "$(cnt_char "$target_path" ":")" -eq 1 ] ; then
-      local flavor      ; flavor="$(println "$target_path" | cut -d":" -f2)"
-      local target_path ; target_path="$(println "$target_path" | cut -d":" -f1)"
+      local flavor="${target_path#*:}"
+      local target_path="${target_path%%:*}"
 
-      vars line_vars push SASH_FLAVOR="$flavor"
+      vars meta_vars push_from_args SASH_FLAVOR="$flavor"
     fi
 
     dir_exists "$target_path"
 
     local target_dir ; target_dir="$(realpath "${target_path}")"
     local target     ; target="$(basename "${target_dir}")"
+
+    vars meta_vars push_from_args SASH_TARGET="$target"
 
     # Prepare all environment variables
     vars all_vars merge_all
@@ -366,9 +391,7 @@ EOS
       chmod +x sash sash.script
 
       # Gather all variables in a single env file
-      print_args \
-        "SASH_TARGET=${target}" \
-        "${all_vars[@]}" | sort > deploy.env
+      print_args "${all_vars[@]}" | sort > deploy.env
     )
 
     # Make sure all variables are available in this scope
@@ -573,7 +596,7 @@ EOS
       local target="${1:?"runbook target parameter required"}" ; shift
       local target_path="${runbook_dir}/${target}"
 
-      vars line_vars clear
+      vars line_vars empty
       vars line_vars push_from_args "$@"
 
       deploy_target "$host" "$target_path"

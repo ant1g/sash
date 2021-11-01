@@ -9,11 +9,11 @@ A simple utility to deploy targets (configuration, scripts) to remote hosts over
 Installing it is straighforward, because sash consists only of a single script.
 
 ```bash
-curl -O --output-dir /usr/local/bin/ https://raw.githubusercontent.com/ant1g/sash/master/sash
+curl -O --output-dir /usr/local/bin/ https://raw.githubusercontent.com/ant1g/sash/v0.1.1/sash
 ```
 or
 ```bash
-wget -P /usr/local/bin/ https://raw.githubusercontent.com/ant1g/sash/master/sash
+wget -P /usr/local/bin/ https://raw.githubusercontent.com/ant1g/sash/v0.1.1/sash
 ```
 
 Note that `/usr/local/bin/` can be replaced with a different directory that is on your `$PATH`, such as `~/bin/` or `~/.local/bin`.
