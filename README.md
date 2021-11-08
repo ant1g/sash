@@ -9,7 +9,7 @@ A simple utility to deploy targets (configuration, scripts) to remote hosts over
 Installing it is straighforward, because sash consists only of a single script.
 
 ```bash
-curl -O --output-dir /usr/local/bin/ https://raw.githubusercontent.com/ant1g/sash/v0.1.1/sash
+curl --output /usr/local/bin/sash https://raw.githubusercontent.com/ant1g/sash/v0.1.1/sash
 ```
 or
 ```bash
