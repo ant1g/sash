@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-SASH_VERSION="0.1.1"
+SASH_VERSION="0.1.2"
 
 # Library section
 
@@ -597,6 +597,7 @@ EOS
       local target_path="${runbook_dir}/${target}"
 
       vars line_vars empty
+      vars meta_vars empty
       vars line_vars push_from_args "$@"
 
       deploy_target "$host" "$target_path"
