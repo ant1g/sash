@@ -588,19 +588,21 @@ EOS
     vars file_vars push_from_args "${vars_in_runbook[@]}"
 
     while read -r line <&3 ; do
-      # Transform all elements of the line as positional arguments
-      readarray -t line_args <<< "$(vars_in_args "$line")"
-      set -- ; set -- "${line_args[@]}" "$@"
+      (
+        # Transform all elements of the line as positional arguments
+        readarray -t line_args <<< "$(vars_in_args "$line")"
+        set -- ; set -- "${line_args[@]}" "$@"
 
-      local host="${1:?"runbook host parameter required"}"     ; shift
-      local target="${1:?"runbook target parameter required"}" ; shift
-      local target_path="${runbook_dir}/${target}"
+        local host="${1:?"runbook host parameter required"}"     ; shift
+        local target="${1:?"runbook target parameter required"}" ; shift
+        local target_path="${runbook_dir}/${target}"
 
-      vars line_vars empty
-      vars meta_vars empty
-      vars line_vars push_from_args "$@"
+        vars line_vars empty
+        vars meta_vars empty
+        vars line_vars push_from_args "$@"
 
-      deploy_target "$host" "$target_path"
+        deploy_target "$host" "$target_path"
+      )
     done 3< <(targets_from_runbook "$runbook_path")
   }
 
